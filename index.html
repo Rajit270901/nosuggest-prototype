@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>NoSuggest – Watch with Purpose (prototype v1)</title>
 <style>
@@ -311,11 +312,11 @@ function refreshSaveButtons(){
 }
 
 /* ---------- Channel + length (looked up at runtime; blank if unavailable) ---------- */
-const meta = store.get('meta',{});
+const meta = store.get('meta2',{});
 function fmt(sec){ sec=Math.round(sec); return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); }
 function metaLine(id){ const m=meta[id]||{}; return [m.ch, m.d?fmt(m.d):''].filter(Boolean).join(' · '); }
 function paintMeta(){ document.querySelectorAll('[data-meta]').forEach(el=>el.textContent=metaLine(el.dataset.meta)); if(current) $('#watchChannel').textContent=metaLine(current.id); }
-function saveMeta(id,patch){ meta[id]=Object.assign(meta[id]||{},patch); store.set('meta',meta); paintMeta(); }
+function saveMeta(id,patch){ meta[id]=Object.assign(meta[id]||{},patch); store.set('meta2',meta); paintMeta(); }
 function fetchChannels(){
   VIDEOS.forEach(v=>{ if(meta[v.id]&&meta[v.id].ch) return;
     fetch('https://www.youtube.com/oembed?format=json&url='+encodeURIComponent('https://www.youtube.com/watch?v='+v.id))
@@ -330,7 +331,7 @@ function probeDurations(){
   const next=()=>{ clearTimeout(timer); cur=probeQueue.shift(); if(!cur){ try{probe.destroy()}catch(e){} holder.remove(); return; } probe.cueVideoById(cur); timer=setTimeout(next,4000); };
   probe = new YT.Player('ytprobe',{width:1,height:1,playerVars:{autoplay:0,mute:1},events:{
     onReady:()=>next(),
-    onStateChange:e=>{ if(e.data===5||e.data===-1){ const d=probe.getDuration&&probe.getDuration(); if(d>0){ saveMeta(cur,{d}); next(); } } },
+    onStateChange:e=>{ if(e.data===5||e.data===-1){ let vd={}; try{ vd=probe.getVideoData()||{}; }catch(err){} const d=probe.getDuration&&probe.getDuration(); if(vd.video_id===cur && d>0){ saveMeta(cur,{d}); next(); } } },
     onError:()=>next() }});
 }
 
@@ -338,8 +339,8 @@ function probeDurations(){
 function loadYT(){ const s=document.createElement('script'); s.src='https://www.youtube.com/iframe_api'; document.head.appendChild(s); }
 window.onYouTubeIframeAPIReady = function(){
   setTimeout(probeDurations, 300);
-  player = new YT.Player('yt',{width:'100%',height:'100%',playerVars:{rel:0,modestbranding:1,playsinline:1,autoplay:0,iv_load_policy:3,fs:1},
-    events:{onReady:()=>{playerReady=true; if(current) player.loadVideoById(current.id)}, onStateChange:onState, onError:e=>{toast('This video cannot play here (error '+e.data+'). Choose another.'); ev('yt_error',{code:e.data,id:current&&current.id})}}});
+  player = new YT.Player('yt',{width:'100%',height:'100%',playerVars:Object.assign({rel:0,modestbranding:1,playsinline:1,autoplay:0,iv_load_policy:3,fs:1}, /^https?:/.test(location.protocol)?{origin:location.origin}:{}),
+    events:{onReady:()=>{playerReady=true; if(current) player.loadVideoById(current.id)}, onStateChange:onState, onError:e=>{ if(!current || !$('#watch').classList.contains('on')) return; toast('This video cannot play here (error '+e.data+'). Choose another.'); ev('yt_error',{code:e.data,id:current&&current.id})}}});
 };
 function play(id){
   current = byId(id); if(!current) return;
@@ -349,7 +350,7 @@ function play(id){
   if(playerReady) player.loadVideoById(id);
 }
 function onState(e){
-  if(e.data===YT.PlayerState.PLAYING && current){ try{ const d=player.getDuration(); if(d>0 && !(meta[current.id]&&meta[current.id].d)) saveMeta(current.id,{d}); }catch(err){} }
+  if(e.data===YT.PlayerState.PLAYING && current){ try{ const d=player.getDuration(); let vd={}; try{ vd=player.getVideoData()||{}; }catch(err){} if(d>0 && vd.video_id===current.id) saveMeta(current.id,{d}); }catch(err){} }
   if(e.data===YT.PlayerState.ENDED){ recordWatch(); showEnded(); }
 }
 function recordWatch(){ if(current){ session.watched.push({id:current.id, secs:Math.round((Date.now()-watchStart)/1000)}); } }
@@ -423,6 +424,7 @@ let taps=0, tapT; $('#statusbar').addEventListener('click',()=>{ taps++; clearTi
 setInterval(()=>{const d=new Date();$('#clock').textContent=d.getHours()+':'+String(d.getMinutes()).padStart(2,'0')},10000);
 
 /* ---------- Start ---------- */
+if(location.protocol==='file:'){ setTimeout(()=>toast('Opened as a file: videos only play from the web link (GitHub Pages).'),400); }
 if(new URLSearchParams(location.search).has('reset')) store.clear();
 go(store.get('onboarded',false) ? 'intent' : 'welcome1');
 document.querySelectorAll('[data-go="intent"]').forEach(b=>b.addEventListener('click',()=>store.set('onboarded',true)));
