@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NoSuggest – Watch with Purpose (prototype v1)</title>
+<style>
+/* Wireframe-style prototype: greyscale, plain shapes, so testers judge the idea, not the polish. */
+:root{
+  --bg:#e9e9e7; --screen:#fff; --ink:#222; --mid:#6b6b6b; --line:#bdbdbb; --soft:#f2f2f0; --sel:#222; --selink:#fff;
+  --r:12px; --font:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);font-family:var(--font);color:var(--ink);display:flex;align-items:center;justify-content:center}
+.phone{width:390px;height:min(844px,100vh - 24px);background:var(--screen);border:2px solid var(--ink);border-radius:36px;overflow:hidden;position:relative;display:flex;flex-direction:column}
+@media (max-width:480px){body{display:block}.phone{width:100%;height:100%;border:0;border-radius:0}}
+.status{height:34px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:13px;color:var(--mid);user-select:none}
+.screen{flex:1;overflow-y:auto;padding:8px 20px 24px;display:none;flex-direction:column;gap:14px}
+.screen.on{display:flex}
+h1{font-size:24px;margin:0;line-height:1.2}
+h2{font-size:18px;margin:0}
+p{margin:0;line-height:1.45}
+.muted{color:var(--mid);font-size:14px}
+.small{font-size:13px;color:var(--mid)}
+.spacer{flex:1}
+button{font:inherit;color:inherit;cursor:pointer}
+.btn{width:100%;padding:14px 12px;border:2px solid var(--ink);border-radius:var(--r);background:var(--screen);font-weight:600;font-size:16px;text-align:center}
+.btn.primary{background:var(--ink);color:var(--screen)}
+.btn:focus-visible,.chip:focus-visible,.link:focus-visible,.card:focus-visible{outline:3px solid #888;outline-offset:2px}
+.link{background:none;border:0;padding:6px;color:var(--mid);text-decoration:underline;font-size:14px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1.5px solid var(--ink);border-radius:999px;padding:8px 14px;background:var(--screen);font-size:15px}
+.chip.sel{background:var(--sel);color:var(--selink)}
+input[type=text],input[type=search]{width:100%;font:inherit;font-size:16px;padding:12px 14px;border:2px solid var(--ink);border-radius:var(--r);background:var(--screen)}
+.dots{display:flex;gap:6px;justify-content:center;align-items:center}
+.dots i{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--ink)}
+.dots i.on{background:var(--ink)}
+.welcome-body{flex:1;display:flex;flex-direction:column;justify-content:center;gap:14px}
+.crossed{font-size:22px;text-decoration:line-through;text-decoration-thickness:2px;color:var(--mid);margin:0}
+/* thumbnails + cards */
+.thumb{aspect-ratio:16/9;width:100%;border:1.5px solid var(--line);border-radius:8px;background:var(--soft) center/cover no-repeat;filter:grayscale(1)}
+.shelf{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.shelf .card{display:flex;flex-direction:column;gap:4px;border:0;background:none;padding:0;text-align:left;font-size:12px}
+.list{display:flex;flex-direction:column;gap:12px}
+.result{display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:start}
+.result .card{border:0;background:none;padding:0;text-align:left;display:contents}
+.result .meta{display:flex;flex-direction:column;gap:4px;min-width:0}
+.result .title{font-size:14px;font-weight:600;line-height:1.3}
+.save{align-self:flex-start;border:1.5px solid var(--ink);border-radius:8px;background:var(--screen);padding:4px 10px;font-size:13px}
+.save.done{background:var(--ink);color:var(--screen)}
+.empty{border:1.5px dashed var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:10px}
+/* player */
+.player{width:100%;aspect-ratio:16/9;background:#000;border-radius:8px;overflow:hidden}
+.player iframe,.player>div{width:100%;height:100%;border:0}
+/* end screen */
+.endthumb{position:relative}
+.endthumb .thumb{opacity:.45}
+.endthumb span{position:absolute;right:8px;bottom:6px;font-size:12px;background:var(--screen);padding:1px 6px;border-radius:4px}
+.purpose{font-size:22px;font-weight:700;line-height:1.25}
+/* sheet + toast */
+.sheet-bg{position:absolute;inset:0;background:rgba(0,0,0,.35);display:none;align-items:flex-end;z-index:5}
+.sheet-bg.on{display:flex}
+.sheet{background:var(--screen);width:100%;border-radius:20px 20px 0 0;padding:20px;display:flex;flex-direction:column;gap:12px}
+.toast{position:absolute;left:20px;right:20px;bottom:24px;background:var(--ink);color:var(--screen);padding:12px 14px;border-radius:10px;font-size:14px;display:none;z-index:6}
+.toast.on{display:block}
+.topbar{display:flex;align-items:center;gap:10px}
+.back{border:0;background:none;font-size:22px;padding:4px 8px 4px 0}
+/* facilitator panel */
+#fac{position:absolute;top:40px;right:12px;background:#fff;border:2px dashed #999;border-radius:10px;padding:10px;display:none;flex-direction:column;gap:6px;z-index:9;font-size:13px;width:200px}
+#fac.on{display:flex}
+#fac button{border:1px solid #999;border-radius:6px;background:#f6f6f6;padding:6px}
+</style>
+</head>
+<body>
+<div class="phone" id="phone">
+  <div class="status" id="statusbar"><span id="clock">9:41</span><span>NoSuggest</span><span>▮▮▮</span></div>
+
+  <!-- 1. WELCOME (3 steps) -->
+  <section class="screen" id="welcome1">
+    <div class="welcome-body" style="text-align:center">
+      <h1 style="font-size:32px">NoSuggest</h1>
+      <p class="muted" style="font-size:18px">Watch what you came for.</p>
+    </div>
+    <button class="btn primary" data-go="welcome2">Next</button>
+    <div class="dots"><i class="on"></i><i></i><i></i><button class="link" data-go="intent">Skip</button></div>
+  </section>
+
+  <section class="screen" id="welcome2">
+    <div class="topbar"><button class="back" data-go="welcome1" aria-label="Back">←</button></div>
+    <div class="welcome-body">
+      <p class="crossed">Feed</p><p class="crossed">Autoplay</p><p class="crossed">Suggestions</p>
+      <h1>Just the videos you pick.</h1>
+    </div>
+    <button class="btn primary" data-go="welcome3">Next</button>
+    <div class="dots"><i></i><i class="on"></i><i></i><button class="link" data-go="intent">Skip</button></div>
+  </section>
+
+  <section class="screen" id="welcome3">
+    <div class="topbar"><button class="back" data-go="welcome2" aria-label="Back">←</button></div>
+    <div class="welcome-body">
+      <h1>Start by searching or saving a video</h1>
+      <button class="btn primary" data-go="intent">Get started</button>
+    </div>
+    <button class="link" data-action="privacy">How we handle your data</button>
+    <div class="dots"><i></i><i></i><i class="on"></i></div>
+  </section>
+
+  <!-- 2. INTENTION -->
+  <section class="screen" id="intent">
+    <div class="topbar"><button class="back" id="intentBack" data-action="intentBack" aria-label="Back">←</button></div>
+    <h1>What are you here for?</h1>
+    <div class="row" id="intentChips">
+      <button class="chip" data-intent="Learn something">Learn something</button>
+      <button class="chip" data-intent="Watch a specific video">A specific video</button>
+      <button class="chip" data-intent="Catch up on a channel">Catch up on a channel</button>
+      <button class="chip" data-intent="Relax">Relax</button>
+    </div>
+    <label class="small" for="intentText">Or type it</label>
+    <input type="text" id="intentText" placeholder='e.g. "pasta recipe"' autocomplete="off">
+    <div class="spacer"></div>
+    <button class="btn primary" data-action="startSession">Start</button>
+    <button class="link" data-action="skipIntent">Skip</button>
+  </section>
+
+  <!-- 3. HOME -->
+  <section class="screen" id="home">
+    <input type="search" id="homeSearch" placeholder="Search YouTube" aria-label="Search YouTube" autocomplete="off">
+    <h2>Your saved videos</h2>
+    <div id="savedArea"></div>
+    <p class="small">Your collections</p>
+    <div class="row" id="collections"></div>
+    <div class="spacer"></div>
+    <div id="emptyHelp" class="empty">
+      <p class="small">Nothing saved yet? Try:</p>
+      <div class="row">
+        <button class="chip" data-try="easy dinner">"easy dinner"</button>
+        <button class="chip" data-try="study tips">"study tips"</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. RESULTS -->
+  <section class="screen" id="results">
+    <div class="topbar"><button class="back" data-go="home" aria-label="Back">←</button>
+      <input type="search" id="resSearch" aria-label="Search YouTube" autocomplete="off"></div>
+    <p class="small" id="resCount"></p>
+    <div class="list" id="resList"></div>
+  </section>
+
+  <!-- 5. WATCH -->
+  <section class="screen" id="watch">
+    <div class="topbar"><button class="back" data-action="leaveWatch" aria-label="Back">←</button><span class="small">Now playing</span></div>
+    <div class="player"><div id="yt"></div></div>
+    <h2 id="watchTitle"></h2>
+    <p class="small" id="watchChannel"></p>
+    <button class="save" id="watchSave">Save</button>
+  </section>
+
+  <!-- 6. END-OF-VIDEO DECISION -->
+  <section class="screen" id="ended">
+    <div class="endthumb"><div class="thumb" id="endThumb"></div><span id="endLabel">video</span></div>
+    <p class="small">Video finished</p>
+    <div id="purposeBlock">
+      <p class="muted">You came here to:</p>
+      <p class="purpose" id="purposeText"></p>
+    </div>
+    <p id="endQuestion">Got what you came for?</p>
+    <button class="btn" data-action="toSaved">Watch something I saved</button>
+    <button class="btn" data-action="toSearch">Search for something specific</button>
+    <button class="btn primary" data-action="done">I'm done</button>
+    <div class="spacer"></div>
+    <p class="small" style="text-align:center" id="sessionLine"></p>
+  </section>
+
+  <!-- 7. DONE -->
+  <section class="screen" id="doneScreen">
+    <div class="welcome-body">
+      <h1>Session finished</h1>
+      <p id="doneSummary"></p>
+      <div class="list" id="doneList"></div>
+    </div>
+    <button class="btn primary" data-action="closeApp">Close NoSuggest</button>
+    <button class="link" data-action="newSession">Start a new session</button>
+  </section>
+
+  <section class="screen" id="closed">
+    <div class="welcome-body" style="text-align:center"><p class="muted">NoSuggest is closed.</p></div>
+    <button class="link" data-action="newSession">Open NoSuggest again</button>
+  </section>
+
+  <!-- bottom sheets -->
+  <div class="sheet-bg" id="saveSheet">
+    <div class="sheet">
+      <h2>Saved</h2>
+      <p class="small">Add it to a collection?</p>
+      <div class="row" id="sheetCollections"></div>
+      <button class="btn" data-action="closeSheet">No thanks</button>
+    </div>
+  </div>
+  <div class="sheet-bg" id="privacySheet">
+    <div class="sheet">
+      <h2>How we handle your data</h2>
+      <p class="muted">Prototype placeholder. In the real app this page would explain accounts, what is stored and who can see it. In this prototype, your saved videos stay only in this browser and nothing is tracked.</p>
+      <button class="btn" data-action="closeSheet">Close</button>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <!-- facilitator panel: Shift+F, or triple-tap the status bar -->
+  <div id="fac">
+    <strong>Facilitator (v1)</strong>
+    <button data-fac="skip">Skip to last 10 s</button>
+    <button data-fac="log">Copy session log (CSV)</button>
+    <button data-fac="reset">Reset to first use</button>
+    <button data-fac="close">Hide</button>
+  </div>
+</div>
+
+<script>
+/* ---------- Video catalogue (editable). Only these videos appear in search. ---------- */
+const VIDEOS = [
+  {id:'di8mRiYYu0I', title:"5 Minute Pasta Recipe You'll Love! Quick, Simple & Incredibly Delicious!", tags:'pasta quick easy dinner recipe cooking', col:'Cooking'},
+  {id:'6iUQgdwPjW8', title:'The best pasta in 5 minutes! So easy, cheap and delicious recipe!', tags:'pasta quick easy dinner recipe cooking cheap', col:'Cooking'},
+  {id:'E8DEfBUH-IM', title:'Garlic Butter Pasta', tags:'pasta garlic butter easy dinner recipe cooking', col:'Cooking'},
+  {id:'pC-8qVhiKn4', title:'How to make garlic butter spaghetti', tags:'pasta spaghetti garlic butter dinner recipe cooking', col:'Cooking'},
+  {id:'F5I6ttMwvuQ', title:'The Best Pasta in 5 Minutes! Easy, Cheap and Delicious Recipe!', tags:'pasta quick easy dinner recipe cooking cheap', col:'Cooking'},
+  {id:'MQVjTtjF0BY', title:'Easy Garlic Butter Pasta', tags:'pasta garlic butter easy dinner recipe cooking', col:'Cooking'},
+  {id:'u8qmWTKN6MA', title:'3 Study Tips from 3 Books in 3 Minutes', tags:'study tips learn exam student', col:'Study'},
+  {id:'TjPFZaMe2yw', title:'3 tips on how to study effectively', tags:'study tips learn exam student', col:'Study'},
+  {id:'NVLiCBHdl7Y', title:'8 of the MOST EFFECTIVE Study Tips in 5 minutes', tags:'study tips learn exam student', col:'Study'},
+];
+const EXTRA = {Cooking:'cook cooking food meal dinner lunch recipe recipes quick easy simple cheap noodles spaghetti italian carbonara tonight', Study:'study studying learn learning exam exams uni university student focus productivity tips'};
+VIDEOS.forEach(v=>{ v.tags += ' ' + (EXTRA[v.col]||''); });
+const thumb = id => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+const byId = id => VIDEOS.find(v=>v.id===id);
+
+/* ---------- State (saved videos persist in this browser) ---------- */
+const store = {
+  get(k,d){try{const v=localStorage.getItem('ns_'+k);return v?JSON.parse(v):d}catch(e){return d}},
+  set(k,v){try{localStorage.setItem('ns_'+k,JSON.stringify(v))}catch(e){}},
+  clear(){try{Object.keys(localStorage).filter(k=>k.startsWith('ns_')).forEach(k=>localStorage.removeItem(k))}catch(e){}}
+};
+let saved = store.get('saved',[]);            // [{id, col}]
+let collections = store.get('cols',['Cooking','Study']);
+let session = null;                            // {purpose, start, watched:[{id, secs}]}
+let current = null, player = null, playerReady = false, watchStart = 0, lastQuery = '';
+const log = []; // simple event log for analysis (shown in console)
+function ev(name, data){const e={t:new Date().toISOString(), name, ...data}; log.push(e); console.log('[NS]',e);}
+
+/* ---------- Navigation ---------- */
+const $ = s => document.querySelector(s);
+function go(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on', s.id===id));
+  if(id==='home') renderHome();
+  ev('screen',{id});
+}
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('on'),2200)}
+function openSheet(id){$('#'+id).classList.add('on')}
+function closeSheets(){document.querySelectorAll('.sheet-bg').forEach(s=>s.classList.remove('on'))}
+
+/* ---------- Session ---------- */
+let chosenIntent = '';
+function startSession(purpose){ session = {purpose, start:Date.now(), watched:[]}; ev('session_start',{purpose}); go('home'); }
+function mins(ms){return Math.max(1,Math.round(ms/60000))}
+
+/* ---------- Home ---------- */
+function renderHome(){
+  const area = $('#savedArea');
+  if(!saved.length){
+    area.innerHTML = '<p class="small">Videos you save will appear here.</p>';
+    $('#emptyHelp').style.display='';
+  } else {
+    $('#emptyHelp').style.display='none';
+    area.innerHTML = '<div class="shelf">'+saved.map(s=>{const v=byId(s.id); if(!v) return '';
+      return `<button class="card" data-play="${v.id}"><div class="thumb" style="background-image:url(${thumb(v.id)})"></div><span>${esc(short(v.title))}</span></button>`}).join('')+'</div>';
+  }
+  $('#collections').innerHTML = collections.map(c=>{
+    const n = saved.filter(s=>s.col===c).length;
+    return `<button class="chip" data-col="${esc(c)}">${esc(c)}${n?' · '+n:''}</button>`}).join('') + '<button class="chip" data-action="newCol">+ New</button>';
+}
+function short(t){return t.length>38?t.slice(0,36)+'…':t}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+/* ---------- Search ---------- */
+function search(q){
+  lastQuery = q.trim(); $('#resSearch').value = lastQuery; ev('search',{q:lastQuery});
+  const words = lastQuery.toLowerCase().split(/\s+/).filter(Boolean);
+  const res = VIDEOS.filter(v=>{const hay=(v.title+' '+v.tags).toLowerCase(); return words.length && words.some(w=>hay.includes(w))});
+  $('#resCount').textContent = res.length ? `${res.length} results for "${lastQuery}"` : `No results for "${lastQuery}" in this prototype. Try "pasta" or "study tips".`;
+  $('#resList').innerHTML = res.map(v=>`
+    <div class="result">
+      <button class="card" data-play="${v.id}" aria-label="Play ${esc(v.title)}"><div class="thumb" style="background-image:url(${thumb(v.id)})"></div></button>
+      <div class="meta"><button class="card title" data-play="${v.id}" style="border:0;background:none;padding:0;text-align:left;font:inherit;font-weight:600;font-size:14px">${esc(v.title)}</button>
+        <span class="small" data-meta="${v.id}">${esc(metaLine(v.id))}</span>
+        <button class="save ${isSaved(v.id)?'done':''}" data-save="${v.id}">${isSaved(v.id)?'Saved':'Save'}</button></div>
+    </div>`).join('');
+  go('results');
+}
+function isSaved(id){return saved.some(s=>s.id===id)}
+let pendingSave = null;
+function toggleSave(id){
+  if(isSaved(id)){ saved = saved.filter(s=>s.id!==id); store.set('saved',saved); toast('Removed from saved'); ev('unsave',{id}); refreshSaveButtons(); return; }
+  saved.push({id, col:null}); store.set('saved',saved); ev('save',{id}); pendingSave=id; refreshSaveButtons();
+  $('#sheetCollections').innerHTML = collections.map(c=>`<button class="chip" data-addcol="${esc(c)}">${esc(c)}</button>`).join('');
+  openSheet('saveSheet');
+}
+function refreshSaveButtons(){
+  document.querySelectorAll('[data-save]').forEach(b=>{const s=isSaved(b.dataset.save);b.classList.toggle('done',s);b.textContent=s?'Saved':'Save'});
+  if(current){const s=isSaved(current.id);$('#watchSave').classList.toggle('done',s);$('#watchSave').textContent=s?'Saved':'Save'}
+}
+
+/* ---------- Channel + length (looked up at runtime; blank if unavailable) ---------- */
+const meta = store.get('meta2',{});
+function fmt(sec){ sec=Math.round(sec); return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); }
+function metaLine(id){ const m=meta[id]||{}; return [m.ch, m.d?fmt(m.d):''].filter(Boolean).join(' · '); }
+function paintMeta(){ document.querySelectorAll('[data-meta]').forEach(el=>el.textContent=metaLine(el.dataset.meta)); if(current) $('#watchChannel').textContent=metaLine(current.id); }
+function saveMeta(id,patch){ meta[id]=Object.assign(meta[id]||{},patch); store.set('meta2',meta); paintMeta(); }
+function fetchChannels(){
+  VIDEOS.forEach(v=>{ if(meta[v.id]&&meta[v.id].ch) return;
+    fetch('https://www.youtube.com/oembed?format=json&url='+encodeURIComponent('https://www.youtube.com/watch?v='+v.id))
+      .then(r=>r.ok?r.json():null).then(j=>{ if(j&&j.author_name) saveMeta(v.id,{ch:j.author_name}); }).catch(()=>{});
+  });
+}
+let probe=null, probeQueue=[];
+function probeDurations(){
+  probeQueue = VIDEOS.filter(v=>!(meta[v.id]&&meta[v.id].d)).map(v=>v.id); if(!probeQueue.length) return;
+  const holder=document.createElement('div'); holder.style.cssText='position:absolute;width:1px;height:1px;left:-9999px;top:0;overflow:hidden'; holder.innerHTML='<div id="ytprobe"></div>'; document.body.appendChild(holder);
+  let cur=null, timer=null;
+  const next=()=>{ clearTimeout(timer); cur=probeQueue.shift(); if(!cur){ try{probe.destroy()}catch(e){} holder.remove(); return; } probe.cueVideoById(cur); timer=setTimeout(next,4000); };
+  probe = new YT.Player('ytprobe',{width:1,height:1,playerVars:{autoplay:0,mute:1},events:{
+    onReady:()=>next(),
+    onStateChange:e=>{ if(e.data===5||e.data===-1){ let vd={}; try{ vd=probe.getVideoData()||{}; }catch(err){} const d=probe.getDuration&&probe.getDuration(); if(vd.video_id===cur && d>0){ saveMeta(cur,{d}); next(); } } },
+    onError:()=>next() }});
+}
+
+/* ---------- YouTube player ---------- */
+function loadYT(){ const s=document.createElement('script'); s.src='https://www.youtube.com/iframe_api'; document.head.appendChild(s); }
+window.onYouTubeIframeAPIReady = function(){
+  setTimeout(probeDurations, 300);
+  player = new YT.Player('yt',{width:'100%',height:'100%',playerVars:Object.assign({rel:0,modestbranding:1,playsinline:1,autoplay:0,iv_load_policy:3,fs:1}, /^https?:/.test(location.protocol)?{origin:location.origin}:{}),
+    events:{onReady:()=>{playerReady=true; if(current) player.loadVideoById(current.id)}, onStateChange:onState, onError:e=>{ if(!current || !$('#watch').classList.contains('on')) return; toast('This video cannot play here (error '+e.data+'). Choose another.'); ev('yt_error',{code:e.data,id:current&&current.id})}}});
+};
+function play(id){
+  current = byId(id); if(!current) return;
+  if(!session) session={purpose:'',start:Date.now(),watched:[]};
+  $('#watchTitle').textContent = current.title; $('#watchChannel').textContent = metaLine(id);
+  refreshSaveButtons(); go('watch'); watchStart = Date.now(); ev('play',{id});
+  if(playerReady) player.loadVideoById(id);
+}
+function onState(e){
+  if(e.data===YT.PlayerState.PLAYING && current){ try{ const d=player.getDuration(); let vd={}; try{ vd=player.getVideoData()||{}; }catch(err){} if(d>0 && vd.video_id===current.id) saveMeta(current.id,{d}); }catch(err){} }
+  if(e.data===YT.PlayerState.ENDED){ recordWatch(); showEnded(); }
+}
+function recordWatch(){ if(current){ session.watched.push({id:current.id, secs:Math.round((Date.now()-watchStart)/1000)}); } }
+function stopPlayer(){ try{ if(playerReady) player.stopVideo(); }catch(e){} }
+
+/* ---------- End-of-video decision screen ---------- */
+function showEnded(){
+  $('#endThumb').style.backgroundImage = `url(${thumb(current.id)})`;
+  $('#endLabel').textContent = short(current.title);
+  if(session.purpose){ $('#purposeBlock').style.display=''; $('#purposeText').textContent = '"'+session.purpose+'"'; $('#endQuestion').textContent='Got what you came for?'; }
+  else { $('#purposeBlock').style.display='none'; $('#endQuestion').textContent='What would you like to do next?'; }
+  const n = session.watched.length;
+  $('#sessionLine').textContent = `${n} video${n===1?'':'s'} · ${mins(Date.now()-session.start)} min this session`;
+  go('ended'); ev('ended_screen',{id:current.id, n});
+}
+
+/* ---------- Done ---------- */
+function finish(){
+  stopPlayer();
+  const n = session ? session.watched.length : 0;
+  const m = session ? mins(Date.now()-session.start) : 0;
+  $('#doneSummary').textContent = (session&&session.purpose? `You came for "${session.purpose}". ` : '') + `You watched ${n} video${n===1?'':'s'} in ${m} min.`;
+  $('#doneList').innerHTML = session ? session.watched.map(w=>{const v=byId(w.id);return v?`<p class="small">• ${esc(v.title)}</p>`:''}).join('') : '';
+  go('doneScreen'); ev('done',{n,m});
+}
+
+/* ---------- Events ---------- */
+document.addEventListener('click', e=>{
+  const t = e.target.closest('button'); if(!t) return;
+  if(t.dataset.go){ go(t.dataset.go); return; }
+  if(t.dataset.intent){ document.querySelectorAll('#intentChips .chip').forEach(c=>c.classList.toggle('sel', c===t)); chosenIntent=t.dataset.intent; return; }
+  if(t.dataset.try){ search(t.dataset.try); return; }
+  if(t.dataset.play){ play(t.dataset.play); return; }
+  if(t.dataset.save){ toggleSave(t.dataset.save); return; }
+  if(t.dataset.col){ const c=t.dataset.col; const ids=saved.filter(s=>s.col===c).map(s=>s.id);
+    if(!ids.length){ toast(`No videos in ${c} yet. Save one and add it here.`); return; }
+    $('#resCount').textContent=`Your ${c} collection`; $('#resSearch').value='';
+    $('#resList').innerHTML = ids.map(id=>{const v=byId(id);return `<div class="result"><button class="card" data-play="${v.id}"><div class="thumb" style="background-image:url(${thumb(v.id)})"></div></button><div class="meta"><span class="title">${esc(v.title)}</span><button class="save done" data-save="${v.id}">Saved</button></div></div>`}).join('');
+    go('results'); return; }
+  if(t.dataset.addcol){ const s=saved.find(x=>x.id===pendingSave); if(s){s.col=t.dataset.addcol; store.set('saved',saved); ev('add_collection',{id:s.id,col:s.col}); toast(`Added to ${s.col}`);} closeSheets(); return; }
+  if(t.dataset.fac){ fac(t.dataset.fac); return; }
+  switch(t.dataset.action){
+    case 'privacy': openSheet('privacySheet'); ev('privacy_open',{}); break;
+    case 'closeSheet': closeSheets(); break;
+    case 'intentBack': go(session ? 'home' : 'welcome3'); break;
+    case 'startSession': { const typed=$('#intentText').value.trim(); startSession(typed || chosenIntent || ''); break; }
+    case 'skipIntent': startSession(''); break;
+    case 'leaveWatch': stopPlayer(); go(lastQuery?'results':'home'); break;
+    case 'toSaved': ev('end_choice',{choice:'saved'}); go('home'); if(!saved.length) toast('You have not saved any videos yet. Use Save on a video to keep it here.'); break;
+    case 'toSearch': ev('end_choice',{choice:'search'}); go('home'); setTimeout(()=>$('#homeSearch').focus(),50); break;
+    case 'done': ev('end_choice',{choice:'done'}); finish(); break;
+    case 'closeApp': go('closed'); break;
+    case 'newSession': chosenIntent=''; $('#intentText').value=''; document.querySelectorAll('#intentChips .chip').forEach(c=>c.classList.remove('sel')); lastQuery=''; go('intent'); break;
+    case 'newCol': { let c=''; try{ c=(window.prompt('Name your new collection')||'').trim(); }catch(e){} if(!c) c='Collection '+(collections.length+1); if(!collections.includes(c)){collections.push(c); store.set('cols',collections);} renderHome(); toast(`Created "${c}"`); ev('new_collection',{c}); break; }
+  }
+});
+['homeSearch','resSearch'].forEach(id=>$('#'+id).addEventListener('keydown',e=>{ if(e.key==='Enter' && e.target.value.trim()) search(e.target.value); }));
+document.querySelectorAll('.sheet-bg').forEach(s=>s.addEventListener('click',e=>{ if(e.target===s) closeSheets(); }));
+
+/* ---------- Facilitator tools ---------- */
+function fac(cmd){
+  if(cmd==='skip'){ try{ const d=player.getDuration(); if(d>12){ player.seekTo(d-10,true); player.playVideo(); } }catch(e){} }
+  if(cmd==='log'){ const csv=['time,event,details'].concat(log.map(e=>{const {t,name,...rest}=e; return t+','+name+',"'+JSON.stringify(rest).replace(/"/g,"'")+'"';})).join('\n');
+    const done=()=>toast('Session log copied ('+log.length+' events)');
+    try{ navigator.clipboard.writeText(csv).then(done,()=>{ console.log(csv); toast('Log printed to console'); }); }catch(e){ console.log(csv); toast('Log printed to console'); } }
+  if(cmd==='reset'){ store.clear(); location.reload(); }
+  if(cmd==='close'||cmd==='skip'){ $('#fac').classList.remove('on'); }
+}
+document.addEventListener('keydown',e=>{ if(/INPUT|TEXTAREA/.test(document.activeElement.tagName)) return; if(e.shiftKey && (e.key==='F'||e.key==='f')) $('#fac').classList.toggle('on'); if(e.shiftKey && (e.key==='E'||e.key==='e')) fac('skip'); });
+let taps=0, tapT; $('#statusbar').addEventListener('click',()=>{ taps++; clearTimeout(tapT); tapT=setTimeout(()=>taps=0,600); if(taps>=3){ $('#fac').classList.toggle('on'); taps=0; } });
+setInterval(()=>{const d=new Date();$('#clock').textContent=d.getHours()+':'+String(d.getMinutes()).padStart(2,'0')},10000);
+
+/* ---------- Start ---------- */
+if(location.protocol==='file:'){ setTimeout(()=>toast('Opened as a file: videos only play from the web link (GitHub Pages).'),400); }
+if(new URLSearchParams(location.search).has('reset')) store.clear();
+go(store.get('onboarded',false) ? 'intent' : 'welcome1');
+document.querySelectorAll('[data-go="intent"]').forEach(b=>b.addEventListener('click',()=>store.set('onboarded',true)));
+loadYT(); fetchChannels();
+</script>
+</body>
+</html>
