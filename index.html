@@ -18,6 +18,7 @@
   --bg:#0b0d10; --screen:#12161c; --surface:#1b2129; --ink:#e8eaed; --mid:#a6aebb; --line:#2e3642; --soft:#181d24;
   --accent:#86c9b3; --accent-ink:#0e1a16; --accent-soft:#1d3530; --frame:#2e3642; color-scheme:dark}}
 *{box-sizing:border-box}
+[hidden]{display:none !important}
 html,body{height:100%;margin:0}
 body{background:var(--bg);font-family:var(--font);color:var(--ink);display:flex;align-items:center;justify-content:center;-webkit-font-smoothing:antialiased}
 .phone{width:390px;height:min(844px,100vh - 24px);background:var(--screen);border:3px solid var(--frame);border-radius:40px;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.18)}
@@ -327,6 +328,7 @@ function startSession(purpose, typed, limit){
 function renderPurposeBars(){
   document.querySelectorAll('[data-pbar]').forEach(b=>{
     if(session && session.purpose){ b.hidden=false; b.innerHTML = `You're here to: <strong>${esc(session.purpose)}</strong> · <button class="link" data-action="changePurpose">change</button>`; }
+    else if(session){ b.hidden=false; b.innerHTML = `No purpose set · <button class="link" data-action="changePurpose">set one</button>`; }
     else b.hidden=true; });
   document.querySelectorAll('[data-savedcount]').forEach(b=>b.textContent = 'Saved' + (saved.length?` (${saved.length})`:''));
 }
@@ -334,8 +336,10 @@ function renderIntent(){
   const last = store.get('lastPurpose','');
   const row = $('#lastPurposeRow');
   if(last){ row.hidden=false; row.innerHTML = `<button class="chip" data-uselast="1">Use last: ${esc(last)}</button>`; } else row.hidden=true;
-  const it=$('#intentText'); if(!it._bound){ it._bound=true; it.addEventListener('input',()=>{ const c=document.querySelector('[data-uselast]'); if(c && c.classList.contains('sel') && it.value!==store.get('lastPurpose','')){ c.classList.remove('sel'); c.textContent='Use last: '+store.get('lastPurpose',''); } }); }
+  const it=$('#intentText'); if(!it._bound){ it._bound=true; it.addEventListener('input',()=>{ if(it.value.trim()) clearIntentChips(); if(it.value!==store.get('lastPurpose','')) resetUseLast(); }); }
 }
+function clearIntentChips(){ chosenIntent=''; document.querySelectorAll('#intentChips .chip').forEach(c=>c.classList.remove('sel')); }
+function resetUseLast(){ const c=document.querySelector('[data-uselast]'); if(c && c.classList.contains('sel')){ c.classList.remove('sel'); c.textContent='Use last: '+store.get('lastPurpose',''); } }
 function renderSavedList(){
   $('#savedListBody').innerHTML = saved.length ? saved.map(s=>{const v=byId(s.id); if(!v) return '';
     return `<div class="result"><button class="card" data-play="${v.id}" aria-label="Play ${esc(v.title)}"><div class="thumb" style="background-image:url(${thumb(v.id)})"></div></button>
@@ -425,8 +429,10 @@ window.onYouTubeIframeAPIReady = function(){
   player = new YT.Player('yt',{width:'100%',height:'100%',playerVars:Object.assign({rel:0,modestbranding:1,playsinline:1,autoplay:0,iv_load_policy:3,fs:1}, /^https?:/.test(location.protocol)?{origin:location.origin}:{}),
     events:{onReady:()=>{playerReady=true; if(current) player.loadVideoById(current.id)}, onStateChange:onState, onError:e=>{ if(!current || !$('#watch').classList.contains('on')) return; toast('This video cannot play here (error '+e.data+'). Choose another.'); ev('yt_error',{code:e.data,id:current&&current.id})}}});
 };
+let watchReturn = 'home';
 function play(id){
   current = byId(id); if(!current) return;
+  const on=document.querySelector('.screen.on'); if(on && on.id!=='watch') watchReturn = (on.id==='ended'||on.id==='doneScreen') ? 'home' : on.id;
   if(!session) session={purpose:'',start:Date.now(),watched:[]};
   $('#watchTitle').textContent = current.title; $('#watchChannel').textContent = metaLine(id);
   refreshSaveButtons(); $('#playHint').hidden=false; go('watch'); watchStart = Date.now(); ev('play',{id});
@@ -472,10 +478,10 @@ function finish(){
 document.addEventListener('click', e=>{
   const t = e.target.closest('button'); if(!t) return;
   if(t.dataset.go){ go(t.dataset.go); return; }
-  if(t.dataset.intent){ document.querySelectorAll('#intentChips .chip').forEach(c=>c.classList.toggle('sel', c===t)); chosenIntent=t.dataset.intent; return; }
+  if(t.dataset.intent){ document.querySelectorAll('#intentChips .chip').forEach(c=>c.classList.toggle('sel', c===t)); chosenIntent=t.dataset.intent; $('#intentText').value=''; resetUseLast(); return; }
   if(t.dataset.try){ search(t.dataset.try); return; }
   if(t.dataset.limit!==undefined){ document.querySelectorAll('#limitChips .chip').forEach(c=>c.classList.toggle('sel', c===t)); chosenLimit=+t.dataset.limit; return; }
-  if(t.dataset.uselast){ const last=store.get('lastPurpose',''); if(t.classList.contains('sel')) return; $('#intentText').value=last; t.classList.add('sel'); t.textContent='Using: '+last; ev('use_last_purpose',{last}); return; }
+  if(t.dataset.uselast){ const last=store.get('lastPurpose',''); if(t.classList.contains('sel')) return; $('#intentText').value=last; clearIntentChips(); t.classList.add('sel'); t.textContent='Using: '+last; ev('use_last_purpose',{last}); return; }
   if(t.dataset.play){ play(t.dataset.play); return; }
   if(t.dataset.save){ toggleSave(t.dataset.save); return; }
   if(t.dataset.col){ const c=t.dataset.col; const ids=saved.filter(s=>s.col===c).map(s=>s.id);
@@ -491,13 +497,13 @@ document.addEventListener('click', e=>{
     case 'intentBack': go(session ? 'home' : 'welcome3'); break;
     case 'startSession': { const typed=$('#intentText').value.trim(); startSession(typed || chosenIntent || '', !!typed, chosenLimit); break; }
     case 'viewSaved': { closeSheets(); const on=document.querySelector('.screen.on'); savedReturn = on && on.id!=='savedList' ? on.id : 'home'; if(savedReturn==='watch') stopPlayer(); ev('view_saved',{from:savedReturn}); go('savedList'); break; }
-    case 'savedBack': go(savedReturn==='watch' ? (lastQuery?'results':'home') : savedReturn); break;
+    case 'savedBack': go(savedReturn==='watch' ? watchReturn : savedReturn); break;
     case 'confirmRemove': closeSheets(); if(pendingSave) removeSaved(pendingSave); break;
     case 'changePurpose': ev('change_purpose',{}); go('intent'); break;
     case 'skipIntent': startSession('', false, 0); break;
-    case 'leaveWatch': stopPlayer(); go(lastQuery?'results':'home'); break;
+    case 'leaveWatch': stopPlayer(); go(watchReturn); break;
     case 'toSaved': ev('end_choice',{choice:'saved'}); savedReturn='ended'; go('savedList'); break;
-    case 'toSearch': ev('end_choice',{choice:'search'}); go('home'); setTimeout(()=>$('#homeSearch').focus(),50); break;
+    case 'toSearch': ev('end_choice',{choice:'search'}); go('home'); $('#homeSearch').focus(); break;
     case 'done': ev('end_choice',{choice:'done'}); finish(); break;
     case 'closeApp': go('closed'); break;
     case 'newSession': chosenIntent=''; chosenLimit=0; document.querySelectorAll('#limitChips .chip').forEach(c=>c.classList.toggle('sel', c.dataset.limit==='0')); $('#intentText').value=''; document.querySelectorAll('#intentChips .chip').forEach(c=>c.classList.remove('sel')); lastQuery=''; go('intent'); break;
