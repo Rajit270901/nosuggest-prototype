@@ -273,17 +273,17 @@ input[type=search]{padding-left:40px;background:var(--surface) url("data:image/s
 </div>
 
 <script>
-/* ---------- Video catalogue (editable). Only these videos appear in search. ---------- */
+/* ---------- Video catalogue. Only these videos appear in search. Channel and length checked against YouTube's player (21 Oct 2026). ---------- */
 const VIDEOS = [
-  {id:'di8mRiYYu0I', title:"5 Minute Pasta Recipe You'll Love! Quick, Simple & Incredibly Delicious!", tags:'pasta quick easy dinner recipe cooking', col:'Cooking'},
-  {id:'6iUQgdwPjW8', title:'The best pasta in 5 minutes! So easy, cheap and delicious recipe!', tags:'pasta quick easy dinner recipe cooking cheap', col:'Cooking'},
-  {id:'E8DEfBUH-IM', title:'Garlic Butter Pasta', tags:'pasta garlic butter easy dinner recipe cooking', col:'Cooking'},
-  {id:'pC-8qVhiKn4', title:'How to make garlic butter spaghetti', tags:'pasta spaghetti garlic butter dinner recipe cooking', col:'Cooking'},
-  {id:'F5I6ttMwvuQ', title:'The Best Pasta in 5 Minutes! Easy, Cheap and Delicious Recipe!', tags:'pasta quick easy dinner recipe cooking cheap', col:'Cooking'},
-  {id:'MQVjTtjF0BY', title:'Easy Garlic Butter Pasta', tags:'pasta garlic butter easy dinner recipe cooking', col:'Cooking'},
-  {id:'u8qmWTKN6MA', title:'3 Study Tips from 3 Books in 3 Minutes', tags:'study tips learn exam student', col:'Study'},
-  {id:'TjPFZaMe2yw', title:'3 tips on how to study effectively', tags:'study tips learn exam student', col:'Study'},
-  {id:'NVLiCBHdl7Y', title:'8 of the MOST EFFECTIVE Study Tips in 5 minutes', tags:'study tips learn exam student', col:'Study'},
+  {id:'di8mRiYYu0I', ch:'Ricette Perfette', len:'3:14', title:"5 Minute Pasta Recipe You'll Love! Quick, Simple & Incredibly Delicious!", tags:'pasta quick easy dinner recipe cooking', col:'Cooking'},
+  {id:'6iUQgdwPjW8', ch:'Ricette Perfette', len:'5:02', title:'The best pasta in 5 minutes! So easy, cheap and delicious recipe!', tags:'pasta quick easy dinner recipe cooking cheap', col:'Cooking'},
+  {id:'E8DEfBUH-IM', ch:'Pocket To Plate', len:'3:14', title:'Garlic Butter Pasta', tags:'pasta garlic butter easy dinner recipe cooking', col:'Cooking'},
+  {id:'pC-8qVhiKn4', ch:'Kitchen Draft', len:'3:11', title:'How to make garlic butter spaghetti', tags:'pasta spaghetti garlic butter dinner recipe cooking', col:'Cooking'},
+  {id:'F5I6ttMwvuQ', ch:'Ricette Perfette', len:'4:05', title:'The Best Pasta in 5 Minutes! Easy, Cheap and Delicious Recipe!', tags:'pasta quick easy dinner recipe cooking cheap', col:'Cooking'},
+  {id:'MQVjTtjF0BY', ch:'Little Sunny Kitchen', len:'1:24', title:'Easy Garlic Butter Pasta', tags:'pasta garlic butter easy dinner recipe cooking', col:'Cooking'},
+  {id:'u8qmWTKN6MA', ch:'Mike and Matty', len:'3:36', title:'3 Study Tips from 3 Books in 3 Minutes', tags:'study tips learn exam student', col:'Study'},
+  {id:'TjPFZaMe2yw', ch:'TED-Ed', len:'5:08', title:'3 tips on how to study effectively', tags:'study tips learn exam student', col:'Study'},
+  {id:'NVLiCBHdl7Y', ch:'Somya Garg', len:'4:56', title:'8 of the MOST EFFECTIVE Study Tips in 5 minutes', tags:'study tips learn exam student', col:'Study'},
 ];
 const EXTRA = {Cooking:'cook cooking food meal dinner lunch recipe recipes quick easy simple cheap noodles spaghetti italian carbonara tonight', Study:'study studying learn learning exam exams uni university student focus productivity tips'};
 VIDEOS.forEach(v=>{ v.tags += ' ' + (EXTRA[v.col]||''); });
@@ -399,33 +399,11 @@ function refreshSaveButtons(){
 }
 
 /* ---------- Channel + length (looked up at runtime; blank if unavailable) ---------- */
-const meta = store.get('meta3',{});
-function fmt(sec){ sec=Math.floor(sec); return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); }
-function metaLine(id){ const m=meta[id]||{}; return [m.ch, m.d?fmt(m.d):''].filter(Boolean).join(' · '); }
-function paintMeta(){ document.querySelectorAll('[data-meta]').forEach(el=>el.textContent=metaLine(el.dataset.meta)); if(current) $('#watchChannel').textContent=metaLine(current.id); }
-function saveMeta(id,patch){ meta[id]=Object.assign(meta[id]||{},patch); store.set('meta3',meta); paintMeta(); }
-function fetchChannels(){
-  VIDEOS.forEach(v=>{ if(meta[v.id]&&meta[v.id].ch) return;
-    fetch('https://www.youtube.com/oembed?format=json&url='+encodeURIComponent('https://www.youtube.com/watch?v='+v.id))
-      .then(r=>r.ok?r.json():null).then(j=>{ if(j&&j.author_name) saveMeta(v.id,{ch:j.author_name}); }).catch(()=>{});
-  });
-}
-let probe=null, probeQueue=[];
-function probeDurations(){
-  probeQueue = VIDEOS.filter(v=>!(meta[v.id]&&meta[v.id].d)).map(v=>v.id); if(!probeQueue.length) return;
-  const holder=document.createElement('div'); holder.style.cssText='position:absolute;width:1px;height:1px;left:-9999px;top:0;overflow:hidden'; holder.innerHTML='<div id="ytprobe"></div>'; document.body.appendChild(holder);
-  let cur=null, timer=null;
-  const next=()=>{ clearTimeout(timer); cur=probeQueue.shift(); if(!cur){ try{probe.destroy()}catch(e){} holder.remove(); return; } probe.cueVideoById(cur); timer=setTimeout(next,4000); };
-  probe = new YT.Player('ytprobe',{width:1,height:1,playerVars:{autoplay:0,mute:1},events:{
-    onReady:()=>next(),
-    onStateChange:e=>{ if(e.data===5||e.data===-1){ let vd={}; try{ vd=probe.getVideoData()||{}; }catch(err){} const d=probe.getDuration&&probe.getDuration(); if(vd.video_id===cur && d>0){ saveMeta(cur,{d}); next(); } } },
-    onError:()=>next() }});
-}
+function metaLine(id){ const v=byId(id); return v ? [v.ch, v.len].filter(Boolean).join(' · ') : ''; }
 
 /* ---------- YouTube player ---------- */
 function loadYT(){ const s=document.createElement('script'); s.src='https://www.youtube.com/iframe_api'; document.head.appendChild(s); }
 window.onYouTubeIframeAPIReady = function(){
-  setTimeout(probeDurations, 300);
   player = new YT.Player('yt',{width:'100%',height:'100%',playerVars:Object.assign({rel:0,modestbranding:1,playsinline:1,autoplay:0,iv_load_policy:3,fs:1}, /^https?:/.test(location.protocol)?{origin:location.origin}:{}),
     events:{onReady:()=>{playerReady=true; if(current) player.loadVideoById(current.id)}, onStateChange:onState, onError:e=>{ if(!current || !$('#watch').classList.contains('on')) return; toast('This video cannot play here (error '+e.data+'). Choose another.'); ev('yt_error',{code:e.data,id:current&&current.id})}}});
 };
@@ -439,8 +417,8 @@ function play(id){
   if(playerReady) player.loadVideoById(id);
 }
 function onState(e){
-  if(e.data===YT.PlayerState.PLAYING){ $('#playHint').hidden=true; }
-  if(e.data===YT.PlayerState.PLAYING && current){ try{ const d=player.getDuration(); let vd={}; try{ vd=player.getVideoData()||{}; }catch(err){} if(d>0 && vd.video_id===current.id) saveMeta(current.id,{d}); }catch(err){} }
+  if(e.data===YT.PlayerState.PLAYING || e.data===YT.PlayerState.BUFFERING){ $('#playHint').hidden=true; }
+  else if(e.data===YT.PlayerState.PAUSED || e.data===YT.PlayerState.UNSTARTED || e.data===YT.PlayerState.CUED){ if(!(player.getCurrentTime && player.getCurrentTime()>1)) $('#playHint').hidden=false; }
   if(e.data===YT.PlayerState.ENDED){ recordWatch(); showEnded(); }
 }
 function recordWatch(){ if(current){ session.watched.push({id:current.id, secs:Math.round((Date.now()-watchStart)/1000)}); } }
@@ -531,7 +509,7 @@ if(location.protocol==='file:'){ setTimeout(()=>toast('Opened as a file: videos 
 if(new URLSearchParams(location.search).has('reset')) store.clear();
 go(store.get('onboarded',false) ? 'intent' : 'welcome1');
 document.querySelectorAll('[data-go="intent"]').forEach(b=>b.addEventListener('click',()=>store.set('onboarded',true)));
-loadYT(); fetchChannels();
+loadYT();
 </script>
 </body>
 </html>
