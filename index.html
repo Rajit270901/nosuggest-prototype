@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>NoSuggest – Watch with Purpose (prototype v2)</title>
+<title>NoSuggest – Watch with Purpose (prototype v2.1)</title>
 <style>
 /* v2 interface design: calm, deliberate, phone-first. One accent colour, used only for the user's purpose and the main action.
    Follows Apple HIG / Material basics: system font, 44px touch targets, text labels, WCAG AA contrast, dark mode for evening use. */
@@ -86,6 +86,7 @@ input[type=search]{padding-left:40px;background:var(--surface) url("data:image/s
 .purposebar{flex:1;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--accent-soft);border:1.5px solid transparent;border-radius:12px;padding:7px 12px;font-size:14px}
 .purposebar::before{content:"◎";color:var(--accent);font-weight:700}
 .purposebar .link{min-height:32px;padding:2px 4px}
+.screen > .purposebar{flex:none}
 .toplink{margin-left:auto;border:1.5px solid var(--line);border-radius:999px;background:var(--surface);padding:6px 14px;font-size:14px;font-weight:600;min-height:40px;white-space:nowrap}
 .notyet{font-size:14px;color:var(--mid);margin-top:4px}
 /* facilitator panel */
@@ -141,9 +142,10 @@ input[type=search]{padding-left:40px;background:var(--surface) url("data:image/s
     <label class="small" for="intentText">Or type it</label>
     <input type="text" id="intentText" placeholder='e.g. "pasta recipe"' autocomplete="off">
     <div class="row" id="lastPurposeRow" hidden></div>
-    <p class="small" id="limitLabel">How long do you want to watch? (optional)</p>
+    <p class="small" id="limitLabel">How long do you want to spend? (optional)<br>Timed from when you tap Start, for the whole session.</p>
     <div class="row" id="limitChips" role="group" aria-labelledby="limitLabel">
       <button class="chip" data-limit="10">10 min</button>
+      <button class="chip" data-limit="15">15 min</button>
       <button class="chip" data-limit="20">20 min</button>
       <button class="chip" data-limit="30">30 min</button>
       <button class="chip sel" data-limit="0">No limit</button>
@@ -162,6 +164,7 @@ input[type=search]{padding-left:40px;background:var(--surface) url("data:image/s
     <p class="small">Your collections</p>
     <div class="row" id="collections"></div>
     <div class="spacer"></div>
+    <div id="channelNote" class="empty" hidden><p class="small">Following channels is already part of the current NoSuggest app. This prototype focuses on saved videos and search, so try searching for the channel or a topic.</p></div>
     <div id="emptyHelp" class="empty">
       <p class="small">Nothing saved yet? Try:</p>
       <div class="row">
@@ -190,6 +193,7 @@ input[type=search]{padding-left:40px;background:var(--surface) url("data:image/s
   <section class="screen" id="watch">
     <div class="topbar"><button class="back" data-action="leaveWatch" aria-label="Back">←</button><span class="small">Now playing</span><button class="toplink" data-action="viewSaved" data-savedcount>Saved</button></div>
     <div class="player"><div id="yt"></div></div>
+    <p class="small" id="playHint" role="status">Tap ▶ on the video to play</p>
     <h2 id="watchTitle"></h2>
     <p class="small" id="watchChannel"></p>
     <button class="save" id="watchSave">Save</button>
@@ -249,7 +253,9 @@ input[type=search]{padding-left:40px;background:var(--surface) url("data:image/s
   <div class="sheet-bg" id="privacySheet">
     <div class="sheet">
       <h2>How we handle your data</h2>
-      <p class="muted">Prototype placeholder. In the real app this page would explain accounts, what is stored and who can see it. In this prototype, your saved videos stay only in this browser and nothing is tracked.</p>
+      <p class="muted"><strong>No account needed.</strong> This prototype stores only what you choose: your saved videos, collections, last purpose and time limit. They stay on this device, and you can remove them at any time.</p>
+      <p class="muted"><strong>No recommendations, no tracking.</strong> Nothing you watch is used to suggest more videos.</p>
+      <p class="small">Videos play through YouTube's own player, which follows YouTube's privacy policy. Final wording for the live app would be confirmed with the NoSuggest developer.</p>
       <button class="btn" data-action="closeSheet">Close</button>
     </div>
   </div>
@@ -257,7 +263,7 @@ input[type=search]{padding-left:40px;background:var(--surface) url("data:image/s
 
   <!-- facilitator panel: Shift+F, or triple-tap the status bar -->
   <div id="fac">
-    <strong>Facilitator (v2)</strong>
+    <strong>Facilitator (v2.1)</strong>
     <button data-fac="skip">Skip to last 10 s</button>
     <button data-fac="log">Copy session log (CSV)</button>
     <button data-fac="reset">Reset to first use</button>
@@ -328,6 +334,7 @@ function renderIntent(){
   const last = store.get('lastPurpose','');
   const row = $('#lastPurposeRow');
   if(last){ row.hidden=false; row.innerHTML = `<button class="chip" data-uselast="1">Use last: ${esc(last)}</button>`; } else row.hidden=true;
+  const it=$('#intentText'); if(!it._bound){ it._bound=true; it.addEventListener('input',()=>{ const c=document.querySelector('[data-uselast]'); if(c && c.classList.contains('sel') && it.value!==store.get('lastPurpose','')){ c.classList.remove('sel'); c.textContent='Use last: '+store.get('lastPurpose',''); } }); }
 }
 function renderSavedList(){
   $('#savedListBody').innerHTML = saved.length ? saved.map(s=>{const v=byId(s.id); if(!v) return '';
@@ -341,6 +348,7 @@ function mins(ms){return Math.max(1,Math.round(ms/60000))}
 
 /* ---------- Home ---------- */
 function renderHome(){
+  $('#channelNote').hidden = !(session && session.purpose==='Catch up on a channel');
   const area = $('#savedArea');
   if(!saved.length){
     area.innerHTML = '<p class="small">Videos you save will appear here.</p>';
@@ -421,10 +429,11 @@ function play(id){
   current = byId(id); if(!current) return;
   if(!session) session={purpose:'',start:Date.now(),watched:[]};
   $('#watchTitle').textContent = current.title; $('#watchChannel').textContent = metaLine(id);
-  refreshSaveButtons(); go('watch'); watchStart = Date.now(); ev('play',{id});
+  refreshSaveButtons(); $('#playHint').hidden=false; go('watch'); watchStart = Date.now(); ev('play',{id});
   if(playerReady) player.loadVideoById(id);
 }
 function onState(e){
+  if(e.data===YT.PlayerState.PLAYING){ $('#playHint').hidden=true; }
   if(e.data===YT.PlayerState.PLAYING && current){ try{ const d=player.getDuration(); let vd={}; try{ vd=player.getVideoData()||{}; }catch(err){} if(d>0 && vd.video_id===current.id) saveMeta(current.id,{d}); }catch(err){} }
   if(e.data===YT.PlayerState.ENDED){ recordWatch(); showEnded(); }
 }
@@ -435,8 +444,8 @@ function stopPlayer(){ try{ if(playerReady) player.stopVideo(); }catch(e){} }
 function showEnded(){
   $('#endThumb').style.backgroundImage = `url(${thumb(current.id)})`;
   $('#endLabel').textContent = short(current.title);
-  if(session.purpose){ $('#purposeBlock').style.display=''; $('#purposeText').textContent = '"'+session.purpose+'"'; $('#endQuestion').textContent='Got what you came for?'; }
-  else { $('#purposeBlock').style.display='none'; $('#endQuestion').textContent='What would you like to do next?'; }
+  if(session.purpose){ $('#purposeBlock').style.display=''; $('#purposeText').textContent = '"'+session.purpose+'"'; $('#endQuestion').textContent='Got what you came for?'; $('#doneBtn').textContent="Yes, I'm done"; $('#notYetLabel').textContent='Not yet:'; }
+  else { $('#purposeBlock').style.display='none'; $('#endQuestion').textContent='What would you like to do next?'; $('#doneBtn').textContent="I'm done for now"; $('#notYetLabel').textContent='Or keep going:'; }
   const n = session.watched.length;
   $('#sessionLine').textContent = sessionText();
   go('ended'); ev('ended_screen',{id:current.id, n});
@@ -446,15 +455,15 @@ function sessionText(){
   const n = session.watched.length, m = mins(Date.now()-session.start);
   const v = `${n} video${n===1?'':'s'}`;
   if(session.limit){ const over = m - session.limit;
-    return `${v} · ${m} of your ${session.limit} min` + (over>0?` (${over} min over your plan)`:''); }
-  return `${v} · ${m} min this session`;
+    return `${v} watched · session time ${m} of your ${session.limit} min` + (over>0?` (${over} min over your plan)`:''); }
+  return `${v} watched · session time ${m} min`;
 }
 /* ---------- Done ---------- */
 function finish(){
   stopPlayer();
   const n = session ? session.watched.length : 0;
   const m = session ? mins(Date.now()-session.start) : 0;
-  $('#doneSummary').textContent = (session&&session.purpose? `You came for "${session.purpose}". ` : '') + `You watched ${n} video${n===1?'':'s'} in ${m} min` + (session&&session.limit? ` (your plan was ${session.limit} min).` : '.');
+  $('#doneSummary').textContent = (session&&session.purpose? `You came for "${session.purpose}". ` : '') + `You watched ${n} video${n===1?'':'s'}. Session time: ${m} min` + (session&&session.limit? ` (your plan was ${session.limit} min).` : '.');
   $('#doneList').innerHTML = session ? session.watched.map(w=>{const v=byId(w.id);return v?`<p class="small">• ${esc(v.title)}</p>`:''}).join('') : '';
   go('doneScreen'); ev('done',{n,m});
 }
@@ -466,7 +475,7 @@ document.addEventListener('click', e=>{
   if(t.dataset.intent){ document.querySelectorAll('#intentChips .chip').forEach(c=>c.classList.toggle('sel', c===t)); chosenIntent=t.dataset.intent; return; }
   if(t.dataset.try){ search(t.dataset.try); return; }
   if(t.dataset.limit!==undefined){ document.querySelectorAll('#limitChips .chip').forEach(c=>c.classList.toggle('sel', c===t)); chosenLimit=+t.dataset.limit; return; }
-  if(t.dataset.uselast){ const last=store.get('lastPurpose',''); $('#intentText').value=last; ev('use_last_purpose',{last}); return; }
+  if(t.dataset.uselast){ const last=store.get('lastPurpose',''); if(t.classList.contains('sel')) return; $('#intentText').value=last; t.classList.add('sel'); t.textContent='Using: '+last; ev('use_last_purpose',{last}); return; }
   if(t.dataset.play){ play(t.dataset.play); return; }
   if(t.dataset.save){ toggleSave(t.dataset.save); return; }
   if(t.dataset.col){ const c=t.dataset.col; const ids=saved.filter(s=>s.col===c).map(s=>s.id);
